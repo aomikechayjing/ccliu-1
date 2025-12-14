@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>猜猜我是誰 - 綜藝大考驗</title>
+    
+    <!-- 引入 Tailwind CSS (樣式框架) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 React 和 ReactDOM (核心框架) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 引入 Babel (讓瀏覽器即時編譯 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Google Fonts 字型 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', "Microsoft JhengHei", "sans-serif"],
+                    },
+                    animation: {
+                        'gradient-xy': 'gradient-xy 15s ease infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                        'pop-in': 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                        'spin-slow': 'spin 3s linear infinite',
+                        'blob': 'blob 7s infinite',
+                    },
+                    keyframes: {
+                        'gradient-xy': {
+                            '0%, 100%': {
+                                'background-size': '400% 400%',
+                                'background-position': 'left center'
+                            },
+                            '50%': {
+                                'background-size': '200% 200%',
+                                'background-position': 'right center'
+                            }
+                        },
+                        'float': {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        },
+                        'popIn': {
+                            '0%': { opacity: '0', transform: 'scale(0.8)' },
+                            '100%': { opacity: '1', transform: 'scale(1)' }
+                        },
+                        'blob': {
+                            '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0px, 0px) scale(1)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: "Noto Sans TC", sans-serif;
+            overflow-x: hidden;
+            background-color: #f0fdf4; /* 預設背景色 */
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        .glass-dark {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- SVG 圖示組件 ---
+        const IconBase = ({ size = 24, className = "", children }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width={size} 
+                height={size} 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+            >
+                {children}
+            </svg>
+        );
+
+        const HelpCircle = (props) => (
+            <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></IconBase>
+        );
+        const ImageIcon = (props) => (
+            <IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></IconBase>
+        );
+        const CheckCircle = (props) => (
+            <IconBase {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconBase>
+        );
+        const ArrowRight = (props) => (
+            <IconBase {...props}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></IconBase>
+        );
+        const RotateCcw = (props) => (
+            <IconBase {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/><path d="M3 3v9h9"/></IconBase>
+        );
+        const Eye = (props) => (
+            <IconBase {...props}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></IconBase>
+        );
+        const Play = (props) => (
+            <IconBase {...props}><polygon points="5 3 19 12 5 21 5 3"/></IconBase>
+        );
+        const Star = (props) => (
+            <IconBase {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></IconBase>
+        );
+        const Maximize = (props) => (
+            <IconBase {...props}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></IconBase>
+        );
+        const Minimize = (props) => (
+            <IconBase {...props}><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></IconBase>
+        );
+        const Volume2 = (props) => (
+            <IconBase {...props}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></IconBase>
+        );
+        const VolumeX = (props) => (
+            <IconBase {...props}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></IconBase>
+        );
+
+        // --- 主程式邏輯 ---
+        const GuessWhoGame = () => {
+            // 遊戲資料設定 (已修正 ID 重複問題)
+            const gameData = [
+                {
+                    id: 1,
+                    name: "鍾鎮濤",
+                    photos: [
+                        { url: "https://tse1.mm.bing.net/th/id/OIP.9E5o5DgFfMeIFNG0ddmbfAHaHa?pid=Api&P=0&h=180", label: "題目：過去照片 (1)" },
+                        { url: "https://tse3.mm.bing.net/th/id/OIP.5zng624xzQjslUszkK7I8gHaJ0?pid=Api&P=0&h=180", label: "提示 1：過去照片 (2)" },
+                        { url: "https://tse1.mm.bing.net/th/id/OIP.-KBwEk6mTvbkQ8I9AOQHDwHaHa?pid=Api&P=0&h=180", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 2,
+                    name: "金城武",
+                    photos: [
+                        { url: "https://megapx-assets.dcard.tw/images/2e1a59a8-5f95-447e-8e6d-c0d30c5f7d8e/640.jpeg", label: "題目：過去照片 (1)" },
+                        { url: "https://www.juksy.com/api/image/webp?source=https://assets.juksy.com/files/articles/129473/672edcde9b8df.jpg", label: "提示 1：過去照片 (2)" },
+                        { url: "https://cdn-cw1.cw.com.tw/images/article/C1418099648229.jpg", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 3,
+                    name: "楊林",
+                    photos: [
+                        { url: "https://g.udn.com.tw/upfiles/B_OR/OrientExpress/PSN_PHOTO/802/f_28828802_1.jpg", label: "題目：過去照片 (1)" },
+                        { url: "https://i.ytimg.com/vi/sp4ff1RMxJA/sddefault.jpg", label: "提示 1：過去照片 (2)" },
+                        { url: "https://d1vvo51t6lqxtd.cloudfront.net/rss/20200722/b4117159910940122dc5d0dbd39e6a99.jpg", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 4,
+                    name: "張晨光",
+                    photos: [
+                        { url: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTdfy7AdtcrAA7VYMNyTeLJFQT4V3vabEiKmw&s", label: "題目：過去照片 (1)" },
+                        { url: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRmPNNy-lQxApfdcCRkk6rl9AmFOpDVmI5Xg&s", label: "提示 1：過去照片 (2)" },
+                        { url: "https://v3-statics.mirrormedia.mg/images/20210329172012-0810db9e002a85e394b35e857741c471-w1600.webP", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 5,
+                    name: "陳美鳳",
+                    photos: [
+                        { url: "https://images.chinatimes.com/newsphoto/2024-09-25/656/20240925005111.jpg", label: "題目：過去照片 (1)" },
+                        { url: "https://static.ctwant.com/images/content/15/55515/ab92bd2af7d9b1426d06a79f685dc226.jpg", label: "提示 1：過去照片 (2)" },
+                        { url: "https://images.chinatimes.com/newsphoto/2023-08-24/1024/20230824002059.jpg", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 6,
+                    name: "張惠妹",
+                    photos: [
+                        { url: "https://resize-image.vocus.cc/resize?compression=6&norotation=true&url=https%3A%2F%2Fimages.vocus.cc%2Fec998dd5-ad49-4ee8-899f-ffc5e67ab43b.png&width=740&sign=uu-Vso-piL8EjQ5QjovHi6OkkfjZV6cgzwCs3HOKxIk", label: "題目：過去照片 (1)" },
+                        { url: "https://p3-pc-sign.douyinpic.com/tos-cn-i-0813/oAZAAa9DAEB5i6iEATQzCQ9iPaEIAviIUjWpA~tplv-dy-aweme-images:q75.webp?biz_tag=aweme_images&from=327834062&lk3s=138a59ce&s=PackSourceEnum_SEARCH&sc=image&se=false&x-expires=1768071600&x-signature=9B6PFgpPjQbXN%2BKrviesIDkMJSA%3D", label: "提示 1：過去照片 (2)" },
+                        { url: "https://iam.marieclaire.com.tw/s1200c675h100b0webp100/assets/mc/202511/690B0F4697A281762332486.jpeg", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 7,
+                    name: "葉全真",
+                    photos: [
+                        { url: "https://p3-pc-sign.douyinpic.com/tos-cn-i-0813/ooixKNAfAfmAfeJDBBefyeuAE6BxAEauuZfE7Af~tplv-dy-aweme-images:q75.webp?biz_tag=aweme_images&from=327834062&lk3s=138a59ce&s=PackSourceEnum_SEARCH&sc=image&se=false&x-expires=1768136400&x-signature=fXoIE%2FYogcwofFhal5049mUqxPk%3D", label: "題目：過去照片 (1)" },
+                        { url: "https://www.popdaily.com.tw/shaper/wp-content/uploads/2023/12/9tjakf2sqakg8owsggc408k08s6d9d6.jpeg?resize-w=1700&resize-h=968&format=webp", label: "提示 1：過去照片 (2)" },
+                        { url: "https://media.nownews.com/nn_media/thumbnail/2025/09/1758695358375-a8cf895c314d44a99233f7057d7ea7a5-800x451.webp?unShow=false", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 8,
+                    name: "譚艾珍",
+                    photos: [
+                        { url: "https://static.ctwant.com/images/content/43/56643/e515c751d9790b3b7f8070971c97e9f6.jpg", label: "題目：過去照片 (1)" },
+                        { url: "https://img.ltn.com.tw/Upload/ent/page/800/2015/05/11/phpKLAEbA.jpg", label: "提示 1：過去照片 (2)" },
+                        { url: "https://static.tvbs.com.tw/health2.0/images/uploads/2024/12/20241217160929-tsEPrNk0.jpg", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 9,
+                    name: "顧寶明",
+                    photos: [
+                        { url: "https://i1.kknews.cc/rQblo5VmXal2DJDT3aHyEcNefDl4c1M8HA/0.jpg", label: "題目：過去照片 (1)" },
+                        { url: "https://pgw.udn.com.tw/gw/photo.php?u=https://uc.udn.com.tw/photo/2023/03/15/0/20639238.png&x=0&y=0&sw=0&sh=0&exp=3600", label: "提示 1：過去照片 (2)" },
+                        { url: "https://v3-statics.mirrormedia.mg/images/20230313175709-54f48cc7527b03277e4ca036d3265f8a-w1600.jpg", label: "提示 2：現在照片" }
+                    ]
+                },
+                {
+                    id: 10,
+                    name: "賀一航",
+                    photos: [
+                        { url: "https://cdn2.ettoday.net/images/1208/d1208932.jpg", label: "題目：過去照片 (1)" },
+                        { url: "https://uc.udn.com.tw/photo/2024/08/09/105/30266127.jpg", label: "提示 1：過去照片 (2)" },
+                        { url: "https://s.yimg.com/ny/api/res/1.2/_eOuIN3MG5d.O9nJMhlq4w--/YXBwaWQ9aGlnaGxhbmRlcjt3PTY0MDtoPTQyNg--/https://media.zenfs.com/zh-Hant-TW/homerun/ftvn.com.tw/bb3586126f3d210d655109208f446735", label: "提示 2：現在照片" }
+                    ]
+                }
+            ];
+
+            // 狀態管理
+            const [currentRound, setCurrentRound] = useState(0);
+            const [step, setStep] = useState(0);
+            const [gameStatus, setGameStatus] = useState('start');
+            const [isFullscreen, setIsFullscreen] = useState(false);
+            const [isMusicPlaying, setIsMusicPlaying] = useState(true);
+            const audioRef = useRef(null);
+
+            const currentCelebrity = gameData[currentRound];
+
+            useEffect(() => {
+                // 使用 Erik Satie - Gymnopédie No.1 作為背景音樂
+                audioRef.current = new Audio("https://ia800504.us.archive.org/33/items/ErikSatieGymnopedieNo1/ErikSatieGymnopedieNo1.mp3");
+                audioRef.current.loop = true;
+                audioRef.current.volume = 0.5;
+                
+                return () => {
+                    if (audioRef.current) {
+                        audioRef.current.pause();
+                        audioRef.current = null;
+                    }
+                };
+            }, []);
+
+            const toggleMusic = () => {
+                if (!audioRef.current) return;
+                
+                if (isMusicPlaying) {
+                    audioRef.current.pause();
+                } else {
+                    audioRef.current.play().catch(e => console.log("Audio play error:", e));
+                }
+                setIsMusicPlaying(!isMusicPlaying);
+            };
+
+            const handleStartGame = () => {
+                setGameStatus('playing');
+                if (audioRef.current) {
+                    audioRef.current.play().catch(e => {
+                        console.log("Auto-play prevented:", e);
+                        setIsMusicPlaying(false);
+                    });
+                }
+            };
+
+            const toggleFullScreen = () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                    });
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                }
+            };
+
+            useEffect(() => {
+                const handleFullscreenChange = () => {
+                    setIsFullscreen(!!document.fullscreenElement);
+                };
+
+                document.addEventListener('fullscreenchange', handleFullscreenChange);
+                return () => {
+                    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+                };
+            }, []);
+
+            const handleNextStep = () => {
+                if (step < 2) {
+                    setStep(step + 1);
+                }
+            };
+
+            const handleReveal = () => {
+                setStep(3);
+            };
+
+            const handleNextRound = () => {
+                if (currentRound < gameData.length - 1) {
+                    setCurrentRound(currentRound + 1);
+                    setStep(0);
+                } else {
+                    setGameStatus('finished');
+                }
+            };
+
+            const handleRestart = () => {
+                setCurrentRound(0);
+                setStep(0);
+                setGameStatus('playing');
+            };
+
+            const renderControls = () => {
+                if (step < 2) {
+                    return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8 animate-pop-in">
+                            <button
+                                onClick={handleNextStep}
+                                className="group relative flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg hover:shadow-cyan-400/50 hover:-translate-y-1"
+                            >
+                                <Eye size={24} className="group-hover:scale-110 transition-transform" />
+                                <span>{step === 0 ? "下一個提示 (照片2)" : "下一個提示 (現代照)"}</span>
+                            </button>
+                            
+                            <button
+                                onClick={handleReveal}
+                                className="group flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 text-indigo-900 border-2 border-indigo-200 font-bold py-4 px-6 rounded-2xl transition-all backdrop-blur-sm"
+                            >
+                                <HelpCircle size={24} className="group-hover:rotate-12 transition-transform" />
+                                直接公佈
+                            </button>
+                        </div>
+                    );
+                }
+                
+                if (step === 2) {
+                    return (
+                        <div className="flex flex-col gap-4 mt-8 animate-pop-in">
+                            <div className="text-center bg-yellow-100/80 text-yellow-800 font-bold py-2 rounded-lg backdrop-blur-sm animate-pulse">
+                                🌟 這是最後一張提示囉！猜出來了嗎？
+                            </div>
+                            <button
+                                onClick={handleReveal}
+                                className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-bold py-5 px-6 rounded-2xl shadow-xl hover:shadow-orange-500/50 transition-all hover:-translate-y-1 text-2xl"
+                            >
+                                <Star size={32} className="fill-current animate-spin-slow" />
+                                公佈正確答案
+                            </button>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="text-center animate-pop-in mt-6">
+                        <div className="inline-block bg-gradient-to-r from-green-400 to-emerald-500 text-white px-8 py-3 rounded-full text-3xl font-black shadow-lg mb-6 transform -rotate-2">
+                            {currentCelebrity.name}
+                        </div>
+                        
+                        <button
+                            onClick={handleNextRound}
+                            className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xl font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-indigo-500/50 transition-all hover:-translate-y-1 flex items-center justify-center gap-2"
+                        >
+                            {currentRound < gameData.length - 1 ? "挑戰下一題" : "查看最終成績"} <ArrowRight size={24} />
+                        </button>
+                    </div>
+                );
+            };
+
+            const TopRightControls = () => (
+                <div className="absolute top-4 right-4 flex gap-3 z-50">
+                     <button 
+                        onClick={toggleMusic}
+                        className="p-3 rounded-full glass-dark text-white hover:bg-white/20 transition-all hover:scale-110 shadow-lg"
+                        title={isMusicPlaying ? "關閉音樂" : "開啟音樂"}
+                    >
+                        {isMusicPlaying ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                    </button>
+                    <button 
+                        onClick={toggleFullScreen}
+                        className="p-3 rounded-full glass-dark text-white hover:bg-white/20 transition-all hover:scale-110 shadow-lg"
+                        title={isFullscreen ? "退出全螢幕" : "全螢幕"}
+                    >
+                        {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                    </button>
+                </div>
+            );
+
+            // --- 頁面：開始畫面 ---
+            if (gameStatus === 'start') {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-900 animate-gradient-xy flex items-center justify-center p-4 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                        <TopRightControls />
+                        
+                        <div className="glass-panel rounded-3xl p-10 max-w-lg w-full text-center z-10 animate-float border border-white/30">
+                            <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-tr from-yellow-300 to-orange-500 rounded-full shadow-lg mb-8">
+                                <HelpCircle className="w-12 h-12 text-white" />
+                            </div>
+                            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-pink-600 mb-6 drop-shadow-sm">
+                                猜猜我是誰
+                            </h1>
+                            <p className="text-gray-600 mb-10 text-xl font-medium leading-relaxed">
+                                經典團體互動遊戲
+                                <br/>
+                                <span className="text-sm text-gray-500 mt-2 block">看老照片 • 猜大明星 • 喚起回憶</span>
+                            </p>
+                            <button 
+                                onClick={handleStartGame}
+                                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-2xl font-bold py-5 px-8 rounded-2xl shadow-xl shadow-indigo-500/30 transition-all hover:scale-105 hover:-translate-y-1 flex items-center justify-center gap-3"
+                            >
+                                <Play size={28} className="fill-current" /> 
+                                馬上開始
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- 頁面：結束畫面 ---
+            if (gameStatus === 'finished') {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-emerald-800 via-teal-700 to-cyan-800 animate-gradient-xy flex items-center justify-center p-4 relative">
+                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diamond-upholstery.png')] opacity-10"></div>
+                        <TopRightControls />
+                        
+                        <div className="glass-panel rounded-3xl p-12 max-w-lg w-full text-center relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-emerald-600"></div>
+                            <div className="inline-flex items-center justify-center w-24 h-24 bg-green-100 text-green-600 rounded-full mb-6">
+                                <CheckCircle className="w-12 h-12" />
+                            </div>
+                            <h1 className="text-4xl font-black text-gray-800 mb-4">遊戲結束！</h1>
+                            <p className="text-gray-500 mb-10 text-lg">所有的題目都已經猜完囉。<br/>大家猜對了幾題呢？</p>
+                            <button 
+                                onClick={handleRestart}
+                                className="w-full bg-gradient-to-r from-gray-700 to-gray-900 hover:from-gray-600 hover:to-gray-800 text-white text-xl font-bold py-4 px-6 rounded-2xl shadow-lg transition-all hover:-translate-y-1 flex items-center justify-center gap-2"
+                            >
+                                <RotateCcw size={24} /> 再玩一次
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- 頁面：遊戲進行中 ---
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 flex flex-col items-center py-6 px-4 font-sans relative overflow-hidden">
+                    {/* 背景裝飾圓形 */}
+                    <div className="absolute -top-20 -left-20 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+                    <div className="absolute -top-20 -right-20 w-96 h-96 bg-yellow-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+                    <div className="absolute -bottom-20 left-20 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+
+                    <TopRightControls />
+
+                    {/* 頂部標題列 */}
+                    <div className="w-full max-w-2xl mb-6 flex justify-between items-end z-10 mt-12 sm:mt-4">
+                        <div className="flex flex-col">
+                            <span className="text-xs font-bold text-indigo-500 tracking-wider uppercase mb-1">Current Question</span>
+                            <span className="text-3xl font-black text-gray-800 font-mono">
+                                {String(currentRound + 1).padStart(2, '0')} 
+                                <span className="text-gray-300 text-xl mx-2">/</span>
+                                <span className="text-lg text-gray-500">{gameData.length}</span>
+                            </span>
+                        </div>
+                        <button 
+                            onClick={() => setGameStatus('start')} 
+                            className="text-sm font-medium text-gray-400 hover:text-indigo-600 transition-colors px-3 py-1 rounded-lg hover:bg-white/50"
+                        >
+                            回首頁
+                        </button>
+                    </div>
+
+                    {/* 主遊戲卡片 */}
+                    <div className="glass-panel w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden p-2 z-10 transition-all duration-500">
+                        {/* 圖片區域 */}
+                        <div className="relative bg-gray-100 rounded-2xl overflow-hidden aspect-[4/3] group shadow-inner">
+                            {/* 網格背景圖案 */}
+                            <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+
+                            <img 
+                                key={step} // Key change triggers animation
+                                src={currentCelebrity.photos[Math.min(step, 2)].url} 
+                                alt="Celebrity" 
+                                className="absolute inset-0 w-full h-full object-contain z-10 transition-all duration-500 animate-pop-in"
+                            />
+                            
+                            {/* 標籤 */}
+                            <div className="absolute top-4 left-4 z-20">
+                                <div className="bg-black/70 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg flex items-center gap-2 border border-white/20">
+                                    <ImageIcon size={16} className="text-yellow-400" />
+                                    {currentCelebrity.photos[Math.min(step, 2)].label.split('：')[1] || currentCelebrity.photos[Math.min(step, 2)].label}
+                                </div>
+                            </div>
+
+                            {/* 答案揭曉遮罩 */}
+                            {step === 3 && (
+                                <div className="absolute inset-0 bg-black/60 z-30 flex items-center justify-center backdrop-blur-sm animate-fade-in-up">
+                                    {/* 這裡留空，文字移到下方讓圖片看清楚，或者可以放特效 */}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 下方控制區 */}
+                        <div className="p-6 bg-white/50 rounded-b-2xl">
+                            {/* 進度指示條 */}
+                            <div className="flex items-center gap-2 mb-4">
+                                {[0, 1, 2].map((s) => (
+                                    <div 
+                                        key={s} 
+                                        className={`h-2 rounded-full flex-1 transition-all duration-500 ${
+                                            s <= Math.min(step, 2) ? 'bg-gradient-to-r from-indigo-500 to-purple-500 shadow-md' : 'bg-gray-200'
+                                        }`}
+                                    />
+                                ))}
+                                <div className={`h-2 rounded-full flex-1 transition-all duration-500 ${
+                                    step === 3 ? 'bg-gradient-to-r from-green-400 to-emerald-500 shadow-md' : 'bg-gray-200'
+                                }`} />
+                            </div>
+
+                            {renderControls()}
+                        </div>
+                    </div>
+                    
+                    {step < 3 && (
+                        <div className="mt-6 text-gray-500 text-sm font-medium bg-white/60 px-4 py-2 rounded-full backdrop-blur-sm shadow-sm z-10 animate-bounce">
+                            💡 提示：點擊按鈕查看下一張照片
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<GuessWhoGame />);
+    </script>
+</body>
+</html>
